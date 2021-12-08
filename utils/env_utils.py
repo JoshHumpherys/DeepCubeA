@@ -19,6 +19,10 @@ def get_environment(env_name: str) -> Environment:
         from environments.lights_out import LightsOut
         m = re.search('lightsout([\d]+)', env_name)
         env = LightsOut(int(m.group(1)))
+    elif 'hanoi' in env_name:
+        from environments.hanoi import Hanoi
+        m = re.search('hanoi([\d]+)', env_name)
+        env = Hanoi(int(m.group(1)))
     else:
         raise ValueError('No known environment %s' % env_name)
 
