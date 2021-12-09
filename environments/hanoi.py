@@ -55,6 +55,10 @@ class Hanoi(Environment):
         # initialize
         # states_h = np.stack([x.discs for x in states], axis=0)
         states_h = states.copy()
+        if isinstance(states_h[0], HanoiState):
+            states_h = np.stack([x.discs for x in states], axis=0)
+        elif isinstance(states_h[0], np.ndarray):
+            states_h = np.array(states_h)
 
         # get next state
         states_next_h, transition_costs = self._move_h(states_h, action)
@@ -98,8 +102,12 @@ class Hanoi(Environment):
                 @return: Boolean numpy array where the element at index i corresponds to whether or not the
                 state at index i is solved
                 """
-        states_np = np.stack([state.discs for state in states], axis=0)
-        is_equal = np.equal(states_np, np.expand_dims(self.goal_discs, 0))
+        if isinstance(states[0], HanoiState):
+            states_h = np.stack([x.discs for x in states], axis=0)
+        elif isinstance(states[0], np.ndarray):
+            states_h = np.array(states)
+
+        is_equal = np.equal(states_h, np.expand_dims(self.goal_discs, 0))
 
         return np.all(is_equal, axis=1)
 
@@ -211,7 +219,6 @@ class Hanoi(Environment):
         tc_l: List[np.ndarray] = [tc[i] for i in range(num_states)]
 
         return states_exp, tc_l
-
 
     def _move_h(self, states_h: np.ndarray, action: int) -> Tuple[np.ndarray, List[float]]:
         states_next_h: np.ndarray = states_h.copy()
