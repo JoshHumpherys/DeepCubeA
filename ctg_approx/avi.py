@@ -229,6 +229,7 @@ def main():
         last_loss = nnet_utils.train_nnet(nnet, states_nnet, outputs, device, args_dict['batch_size'], num_train_itrs,
                                           itr, args_dict['lr'], args_dict['lr_d'])
         itr += num_train_itrs
+        print(f"Iteration {itr} of {args_dict['max_itrs']} ({(itr / args_dict['max_itrs'])*100:.1f}%)")
 
         # save nnet
         torch.save(nnet.state_dict(), "%s/model_state_dict.pt" % args_dict['curr_dir'])

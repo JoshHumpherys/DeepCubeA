@@ -33,7 +33,7 @@ class Hanoi(Environment):
         super().__init__()
 
         # Validate dim
-        MAX_N = 5
+        MAX_N = 12
         assert dim > 0, 'cant consider hanoi towers with non positive number of towers'
         assert dim < MAX_N, 'cant consider hanoi towers with dim larger than {}'.format(MAX_N)
         self.dim: int = dim
@@ -138,7 +138,8 @@ class Hanoi(Environment):
         """
         # TODO Check with team
         state_dim: int = self.dim * 3
-        nnet = ResnetModel(state_dim, self.dim ** 2, 5000, 1000, 4, 1, True)
+        # nnet = ResnetModel(state_dim, self.dim ** 2, 5000, 1000, 4, 1, True)
+        nnet = ResnetModel(state_dim, self.dim ** 2, 500, 100, 4, 1, True)
 
         return nnet
 
@@ -305,7 +306,11 @@ class Hanoi(Environment):
                 states_next_h[:, pole_t_start_idx:pole_t_stop_idx] = pole_end_updated
 
         # transition costs
-        transition_costs: List[float] = [1.0 for _ in range(states_h.shape[0])]
+        # transition_costs: List[float] = [1.0 for _ in range(states_h.shape[0])]
+        tc = np.ones((1, states_h.shape[0]))
+        tc[np.invert(np.expand_dims(mask_legal_move, 0))] = 100.0
+        tc = tc.tolist()
+        transition_costs = tc
 
         return states_next_h, transition_costs
 
