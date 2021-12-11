@@ -363,6 +363,12 @@ def main():
 
     args = parser.parse_args()
 
+    args_dict: Dict[str, Any] = vars(args)
+
+    print('args_dict: ' + str(args_dict))
+    print('args_dict_keys: ' + '\t'.join([str(x) for x in args_dict.keys()]))
+    print('args_dict_values: ' + '\t'.join([str(x) for x in args_dict.values()]))
+
     if not os.path.exists(args.results_dir):
         os.makedirs(args.results_dir)
 

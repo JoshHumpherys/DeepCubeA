@@ -97,6 +97,10 @@ def parse_arguments(parser: ArgumentParser) -> Dict[str, Any]:
 
     args_dict: Dict[str, Any] = vars(args)
 
+    print('args_dict: ' + str(args_dict))
+    print('args_dict_keys: ' + '\t'.join([str(x) for x in args_dict.keys()]))
+    print('args_dict_values: ' + '\t'.join([str(x) for x in args_dict.values()]))
+
     # make save directory
     nnet_name = args_dict['nnet_name']
     model_dir: str = "%s/%s" % (args_dict['save_dir'], nnet_name)
