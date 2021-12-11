@@ -97,7 +97,8 @@ class NPuzzle(Environment):
 
         return nnet
 
-    def generate_states(self, num_states: int, backwards_range: Tuple[int, int]) -> Tuple[List[NPuzzleState],                                                                                 List[int]]:
+    def generate_states(self, num_states: int, backwards_range: Tuple[int, int]) -> Tuple[List[NPuzzleState],
+                                                                                          List[int]]:
         assert (num_states > 0)
         assert (backwards_range[0] >= 0)
         assert self.fixed_actions, "Environments without fixed actions must implement their own method"
