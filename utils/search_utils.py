@@ -16,7 +16,7 @@ def is_valid_soln(state: State, soln: List[int], env: Environment) -> bool:
 def bellman(states: List, heuristic_fn, env: Environment) -> Tuple[np.ndarray, List[np.ndarray], List[List[State]]]:
     # expand states
     states_exp, tc_l = env.expand(states)
-    tc = np.concatenate(tc_l, axis=0)
+    tc = np.squeeze(np.concatenate(tc_l, axis=0))
 
     # get cost-to-go of expanded states
     states_exp_flat, split_idxs = misc_utils.flatten(states_exp)
