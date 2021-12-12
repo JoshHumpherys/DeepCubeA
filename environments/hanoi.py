@@ -2,9 +2,8 @@ from typing import List, Tuple, Union
 import numpy as np
 import torch.nn as nn
 
-from utils.pytorch_models import ResnetModel
+from utils.env_utils import create_nnet_with_overridden_params
 from .environment_abstract import Environment, State
-from random import randrange
 
 
 class HanoiState(State):
@@ -45,7 +44,15 @@ class Hanoi(Environment):
         # Solved state
         self.goal_discs: np.ndarray = np.concatenate((np.squeeze(np.zeros((self.dim * 2, 1), dtype=self.dtype)), np.arange(1, self.dim + 1, dtype=self.dtype)), axis=0)
 
-    def next_state(self, states: List[HanoiState], action: int) -> Tuple[List[HanoiState], List[float]]:
+        # ND Array Idx
+        self.pole_s_start_idx = 0
+        self.pole_s_stop_idx = self.dim
+        self.pole_a_start_idx = self.dim
+        self.pole_a_stop_idx = self.dim * 2
+        self.pole_t_start_idx = (self.dim * 2)
+        self.pole_t_stop_idx = self.dim * 3
+
+    def next_state(self, states: List[HanoiState], action: np.ndarray) -> Tuple[List[HanoiState], List[float]]:
         """ Get the next state and transition cost given the current state and action
 
         @param states: List of states
@@ -53,7 +60,6 @@ class Hanoi(Environment):
         @return: Next states, transition costs
         """
         # initialize
-        # states_h = np.stack([x.discs for x in states], axis=0)
         states_h = states.copy()
         if isinstance(states_h[0], HanoiState):
             states_h = np.stack([x.discs for x in states], axis=0)
@@ -64,22 +70,19 @@ class Hanoi(Environment):
         states_next_h, transition_costs = self._move_h(states_h, action)
 
         # make states
-        # states_next: List[HanoiState] = [HanoiState(x) for x in list(states_next_h)]
         states_next = states_next_h
 
         return states_next, transition_costs
 
-    def prev_state(self, states: List[HanoiState], action: int) -> List[HanoiState]:
+    def prev_state(self, states: List[HanoiState], action: np.ndarray) -> List[HanoiState]:
         """ Get the previous state based on the current state and action
 
         @param states: List of states
         @param action: Action to take to get the previous state
         @return: Previous states
         """
-        move: str = self.moves[action]
-        move_rev_idx: int = np.where(np.array(self.moves_rev) == np.array(move))[0][0]
 
-        return self.next_state(states, move_rev_idx)[0]
+        return self.next_state(states, action)[0]
 
     def generate_goal_states(self, num_states: int, np_format: bool = False) -> Union[List[HanoiState], np.ndarray]:
         """ Generate goal states
@@ -136,12 +139,10 @@ class Hanoi(Environment):
 
         @return: neural network model
         """
-        # TODO Check with team
-        state_dim: int = self.dim * 3
-        # nnet = ResnetModel(state_dim, self.dim ** 2, 5000, 1000, 4, 1, True)
-        nnet = ResnetModel(state_dim, self.dim ** 2, 500, 100, 4, 1, True)
+        kwargs = dict(state_dim=self.dim * 3, one_hot_depth=self.dim ** 2, h1_dim=5000, resnet_dim=1000,
+                      num_resnet_blocks=4, out_dim=1, batch_norm=True)
 
-        return nnet
+        return create_nnet_with_overridden_params(kwargs)
 
     def generate_states(self, num_states: int, backwards_range: Tuple[int, int]) -> Tuple[List[HanoiState], List[int]]:
 
@@ -166,10 +167,18 @@ class Hanoi(Environment):
             subset_size: int = int(max(len(idxs) / num_env_moves, 1))
             idxs: np.ndarray = np.random.choice(idxs, subset_size)
 
-            move: int = randrange(num_env_moves)
-            # states_to_move = [states[i] for i in idxs]
+            # Get states_to_move, which is a subset of the state ndarray made up of the specific rows
+            # with rows defined by idxs
             states_to_move = states[idxs]
-            states_moved = self.prev_state(states_to_move, move)
+
+            # Get move, which is a list of move numbers, each idx corresponding to the random move
+            # that will be applied to the row in states_to_move
+            # NOTE: the random move can only be a legal move
+            moves_possible_for_state = self._get_valid_moves(states_to_move)
+            # Choose random moves
+            moves_for_state = np.expand_dims(np.array([np.random.choice(np.squeeze(x)) for x in moves_possible_for_state]), 1)
+            # Get previous state for states_to_move given move
+            states_moved = self.prev_state(states_to_move, moves_for_state)
 
             for state_moved_idx, state_moved in enumerate(states_moved):
                 states[idxs[state_moved_idx]] = state_moved
@@ -188,130 +197,172 @@ class Hanoi(Environment):
         """
         assert self.fixed_actions, "Environments without fixed actions must implement their own method"
 
-        # initialize
-        num_states: int = len(states)
-        num_env_moves: int = self.get_num_moves()
-
         states_exp: List[List[State]] = []
+        tc: List[List[State]] = []
         for _ in range(len(states)):
             states_exp.append([])
+            tc.append([])
 
-        tc: np.ndarray = np.empty([num_states, num_env_moves])
+        # tc: np.ndarray = np.empty([num_states, num_env_moves])
 
         # numpy states
-        states_np: np.ndarray = np.stack([state.discs for state in states])
+        states_h: np.ndarray = np.stack([state.discs for state in states])
 
-        # for each move, get next states, transition costs, and if solved
-        move_idx: int
-        move: int
-        for move_idx in range(num_env_moves):
-            # next state
-            states_next_np: np.ndarray
-            tc_move: List[float]
-            states_next_np, tc_move = self._move_h(states_np, move_idx)
+        # determine which moves are possible for state
+        moves_possible_for_state = self._get_valid_moves(states_h)
 
-            # transition cost
-            tc[:, move_idx] = np.array(tc_move)
+        for idx in range(len(states)):
+            state_h = np.expand_dims(states_h[idx, :], 0)
 
-            for idx in range(len(states)):
-                states_exp[idx].append(HanoiState(states_next_np[idx]))
+            for move_idx in range(len(moves_possible_for_state[idx])):
+                move = np.expand_dims(moves_possible_for_state[idx][move_idx], 1)
+                state_next_h, tc_move = self._move_h(state_h, move)
 
-        # make lists
-        tc_l: List[np.ndarray] = [tc[i] for i in range(num_states)]
+                states_exp[idx].append(HanoiState(state_next_h))
+                tc[idx].append(tc_move)
+
+        tc_l = tc
 
         return states_exp, tc_l
+
+    def _get_valid_moves(self, states_h: np.ndarray):
+
+        # Break up ndarray into separate poles
+        pole_src, pole_aux, pole_tgt = self._break_states_h_into_poles(states_h)
+
+        ### Get Top Disk and Top Disk Idx for each pole
+        # SOURCE
+        pole_src_top_disk, _ = self._get_top_disk_and_top_disk_idx(pole_src)
+
+        # AUXILLARY DISK
+        pole_aux_top_disk, _ = self._get_top_disk_and_top_disk_idx(pole_aux)
+
+        # TARGET
+        pole_tgt_top_disk, _ = self._get_top_disk_and_top_disk_idx(pole_tgt)
+
+        ### Check if legal move
+        # SOURCE --> AUXILLARY
+        mask_SA = self._is_valid_move(pole_src_top_disk, pole_aux_top_disk)
+
+        # SOURCE --> TARGET
+        mask_ST = self._is_valid_move(pole_src_top_disk, pole_tgt_top_disk)
+
+        # AUXILLARY --> SOURCE
+        mask_AS = self._is_valid_move(pole_aux_top_disk, pole_src_top_disk)
+
+        # AUXILLARY --> TARGET
+        mask_AT = self._is_valid_move(pole_aux_top_disk, pole_tgt_top_disk)
+
+        # TARGET --> SOURCE
+        mask_TS = self._is_valid_move(pole_tgt_top_disk, pole_src_top_disk)
+
+        # TARGET --> AUXILLARY
+        mask_TA = self._is_valid_move(pole_tgt_top_disk, pole_aux_top_disk)
+
+        ### Combine masks into array
+        # Column order must follow order to moves at the top of the class
+        # moves: List[str] = ['SA', 'ST', 'AS', 'AT', 'TS', 'TA']
+        mask_legal_moves = np.concatenate((mask_SA, mask_ST, mask_AS, mask_AT, mask_TS, mask_TA), axis=1)
+
+        ### Get valid move idx
+        mask_legal_moves_idx = [np.argwhere(x > 0) for x in mask_legal_moves]
+
+        return mask_legal_moves_idx
+
+    def _break_states_h_into_poles(self, states_h: np.ndarray):
+        # Break up ndarray into separate poles
+        pole_src = states_h[:, self.pole_s_start_idx:self.pole_s_stop_idx]
+        pole_aux = states_h[:, self.pole_a_start_idx:self.pole_a_stop_idx]
+        pole_tgt = states_h[:, self.pole_t_start_idx:self.pole_t_stop_idx]
+
+        return pole_src, pole_aux, pole_tgt
+
+    def _get_top_disk_and_top_disk_idx(self, pole):
+        top_disk_idx = np.where(pole > 0, pole, np.inf).argmin(axis=1)
+        top_disk = pole[range(pole.shape[0]), top_disk_idx]
+
+        return top_disk, top_disk_idx
+
+    def _is_valid_move(self, pole_start_top_disk, pole_end_top_disk):
+        # Move is legal if:
+        # 1) a disk is present
+        # 2) disk number from start is less than disc number from end OR end pole is empty (disk value = 0)
+
+        mask_rule_1 = pole_start_top_disk != 0
+        mask_rule_2 = np.logical_or(pole_end_top_disk > pole_start_top_disk,
+                                    np.zeros(pole_end_top_disk.shape) == pole_end_top_disk)
+        mask_legal_move = np.logical_and(mask_rule_1, mask_rule_2)
+
+        return np.expand_dims(mask_legal_move, 1)
+
+    def _get_positive_idx(self, mask):
+        return [np.argwhere(mask > 0)]
+
+    def _move_disk(self, pole_start, pole_end):
+        # Initialize
+        pole_start_updated = pole_start.copy()
+        pole_end_updated = pole_end.copy()
+
+        # Get top disk and idx of top disk
+        pole_start_top_disk, pole_start_top_disk_idx = self._get_top_disk_and_top_disk_idx(pole_start)
+        pole_end_top_disk, pole_end_top_disk_idx = self._get_top_disk_and_top_disk_idx(pole_end)
+
+        # Update starting pole by replacing top disk with 0
+        pole_start_updated[0, pole_start_top_disk_idx] = 0
+
+        # Update ending pole
+        if pole_end_top_disk == 0:
+            # If ending pole is empty
+            pole_end_updated[0, self.dim - 1] = pole_start[0, pole_start_top_disk_idx]
+        else:
+            pole_end_updated[0, pole_end_top_disk_idx - 1] = pole_start[0, pole_start_top_disk_idx]
+
+        return pole_start_updated, pole_end_updated
 
     def _move_h(self, states_h: np.ndarray, action: int) -> Tuple[np.ndarray, List[float]]:
         states_next_h: np.ndarray = states_h.copy()
 
-        # Establish IDX constants
-        pole_s_start_idx = 0
-        pole_s_stop_idx = self.dim
-        pole_a_start_idx = self.dim
-        pole_a_stop_idx = self.dim * 2
-        pole_t_start_idx = (self.dim * 2)
-        pole_t_stop_idx = self.dim * 3
+        # Get individual poles
+        pole_src, pole_aux, pole_tgt = self._break_states_h_into_poles(states_next_h)
 
-        ##### Perform action on each states_h
-        # Get string of move
-        move: str = self.moves[action]
+        for i in range(states_h.shape[0]):
+            src = np.expand_dims(pole_src[i, :], 0)
+            aux = np.expand_dims(pole_aux[i, :], 0)
+            tgt = np.expand_dims(pole_tgt[i, :], 0)
+            move = self.moves[action[i][0]]
 
-        # Get starting pole and ending pole
-        pole_start_id = move[0]
-        pole_end_id = move[1]
+            ########## Process disk move
+            ### Initialize
+            src_updated = src.copy()
+            aux_updated = aux.copy()
+            tgt_updated = tgt.copy()
 
-        # Get top disk on staring pole and ending pole
-        if pole_start_id == 'S':
-            pole_start = states_h[:, pole_s_start_idx:pole_s_stop_idx]
-        elif pole_start_id == 'A':
-            pole_start = states_h[:, pole_a_start_idx:pole_a_stop_idx]
-        elif pole_start_id == 'T':
-            pole_start = states_h[:, pole_t_start_idx:pole_t_stop_idx]
+            ### Get IDs of start and end poles
+            pole_start_id = move[0]
+            pole_end_id = move[1]
 
-        # pole_start_empty_idx = np.where(~pole_start.any(axis=1))[0]
-        # Find first positive disk, else set disk value to 0
-        pole_start_top_disk_idx = np.where(pole_start > 0, pole_start, np.inf).argmin(axis=1)
-        pole_start_top_disk = pole_start[range(pole_start.shape[0]), pole_start_top_disk_idx]
-        # pole_start_top_disk = np.amin(pole_start, axis=1)
-        # pole_start_top_disk_idx = pole_start_positive_disk_idx  # np.argmin(pole_start, axis=1)
+            ### Move disk from start pole to end pole
+            if pole_start_id == 'S' and pole_end_id == 'A':
+                src_updated, aux_updated = self._move_disk(src, aux)
+            elif pole_start_id == 'S' and pole_end_id == 'T':
+                src_updated, tgt_updated = self._move_disk(src, tgt)
+            elif pole_start_id == 'A' and pole_end_id == 'S':
+                aux_updated, src_updated = self._move_disk(aux, src)
+            elif pole_start_id == 'A' and pole_end_id == 'T':
+                aux_updated, tgt_updated = self._move_disk(aux, tgt)
+            elif pole_start_id == 'T' and pole_end_id == 'S':
+                tgt_updated, src_updated = self._move_disk(tgt, src)
+            elif pole_start_id == 'T' and pole_end_id == 'A':
+                tgt_updated, aux_updated = self._move_disk(tgt, aux)
 
-        if pole_end_id == 'S':
-            pole_end = states_h[:, pole_s_start_idx:pole_s_stop_idx]
-        elif pole_end_id == 'A':
-            pole_end = states_h[:, pole_a_start_idx:pole_a_stop_idx]
-        elif pole_end_id == 'T':
-            pole_end = states_h[:, pole_t_start_idx:pole_t_stop_idx]
+            # Update pole
+            pole_src[i, :] = src_updated
+            pole_aux[i, :] = aux_updated
+            pole_tgt[i, :] = tgt_updated
 
-        pole_end_top_disk_idx = np.where(pole_end > 0, pole_end, np.inf).argmin(axis=1)
-        pole_end_top_disk = pole_end[range(pole_end.shape[0]), pole_end_top_disk_idx]
-        # pole_end_top_disk = np.amin(pole_end, axis=1)
-        # pole_end_top_disk_idx = np.argmin(pole_end, axis=1)
-
-        mask_legal_move = np.logical_and(pole_start_top_disk != 0, np.logical_or(pole_end_top_disk > pole_start_top_disk, np.zeros(pole_end_top_disk.shape) == pole_end_top_disk))
-        if np.all(np.invert(mask_legal_move)):
-            states_next_h = states_h
-        else:
-
-            # Create updated pole_start
-            pole_start_updated = pole_start.copy()
-            pole_start_updated[mask_legal_move, pole_start_top_disk_idx[mask_legal_move]] = 0
-            # If not a legal move, no update to pole_start
-
-            # Create updated pole_end
-            pole_end_updated = pole_end.copy()
-            # Handle empty pole_end
-            pole_end_empty_idx = np.where(~pole_end.any(axis=1))[0]
-            pole_end_updated[pole_end_empty_idx, self.dim - 1] = pole_start_top_disk[pole_end_empty_idx]
-            # Handle nonempty pole_end
-            mask_pole_end_nonempty = np.ones(pole_end.shape[0], np.bool)
-            mask_pole_end_nonempty[pole_end_empty_idx] = 0
-            if np.any(mask_pole_end_nonempty):
-                pole_end_updated[mask_pole_end_nonempty, pole_end_top_disk_idx[mask_pole_end_nonempty] - 1] = pole_start_top_disk[mask_pole_end_nonempty]
-            # Handle illegal moves
-            pole_end_updated[np.invert(mask_legal_move), :] = pole_end[np.invert(mask_legal_move), :]
-
-            # Update states_h
-            if pole_start_id == 'S':
-                states_next_h[:, pole_s_start_idx:pole_s_stop_idx] = pole_start_updated
-            elif pole_start_id == 'A':
-                states_next_h[:, pole_a_start_idx:pole_a_stop_idx] = pole_start_updated
-            elif pole_start_id == 'T':
-                states_next_h[:, pole_t_start_idx:pole_t_stop_idx] = pole_start_updated
-
-            if pole_end_id == 'S':
-                states_next_h[:, pole_s_start_idx:pole_s_stop_idx] = pole_end_updated
-            elif pole_end_id == 'A':
-                states_next_h[:, pole_a_start_idx:pole_a_stop_idx] = pole_end_updated
-            elif pole_end_id == 'T':
-                states_next_h[:, pole_t_start_idx:pole_t_stop_idx] = pole_end_updated
+        states_next_h = np.concatenate((pole_src, pole_aux, pole_tgt), axis=1)
 
         # transition costs
-        # transition_costs: List[float] = [1.0 for _ in range(states_h.shape[0])]
-        tc = np.ones((1, states_h.shape[0]))
-        tc[np.invert(np.expand_dims(mask_legal_move, 0))] = 100.0
-        tc = tc.tolist()
-        transition_costs = tc
+        transition_costs: List[float] = [1.0 for _ in range(states_h.shape[0])]
 
         return states_next_h, transition_costs
-
-
