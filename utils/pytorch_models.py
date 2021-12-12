@@ -1,22 +1,30 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class ResnetModel(nn.Module):
     def __init__(self, state_dim: int, one_hot_depth: int, h1_dim: int, resnet_dim: int, num_resnet_blocks: int,
-                 out_dim: int, batch_norm: bool):
+                 out_dim: int, batch_norm: bool, conv: bool = False):
         super().__init__()
         self.one_hot_depth: int = one_hot_depth
         self.state_dim: int = state_dim
         self.blocks = nn.ModuleList()
         self.num_resnet_blocks: int = num_resnet_blocks
         self.batch_norm = batch_norm
+        input_size = self.state_dim * (self.one_hot_depth or 1)
+        if conv:
+            self.conv = nn.Conv1d(1, 36, one_hot_depth * 9, one_hot_depth * 9)
+            fc1_in = self.conv.out_channels * 6
+        else:
+            self.conv = None
+            fc1_in = input_size
 
         # first two hidden layers
         if one_hot_depth > 0:
-            self.fc1 = nn.Linear(self.state_dim * self.one_hot_depth, h1_dim)
+            self.fc1 = nn.Linear(fc1_in, h1_dim)
         else:
-            self.fc1 = nn.Linear(self.state_dim, h1_dim)
+            self.fc1 = nn.Linear(fc1_in, h1_dim)
 
         if self.batch_norm:
             self.bn1 = nn.BatchNorm1d(h1_dim)
@@ -52,6 +60,11 @@ class ResnetModel(nn.Module):
             x = x.view(-1, self.state_dim * self.one_hot_depth)
         else:
             x = x.float()
+
+        if self.conv is not None:
+            x = torch.reshape(x, (x.shape[0], 1, x.shape[1]))
+            x = self.conv(x)
+            x = torch.reshape(x, (x.shape[0], x.shape[1] * x.shape[-1]))
 
         # first two hidden layers
         x = self.fc1(x)
