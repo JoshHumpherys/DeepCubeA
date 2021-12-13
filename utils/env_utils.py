@@ -55,4 +55,6 @@ def create_nnet_with_overridden_params(kwargs) -> nn.Module:
     nnet = ResnetModel(**kwargs)
     print('nnet: ' + str(nnet))
 
+    print('nnet num params: ' + str([None for _ in nnet.parameters()]))
+
     return nnet

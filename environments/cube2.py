@@ -2,6 +2,7 @@ from typing import List, Dict, Tuple, Union
 import numpy as np
 from torch import nn
 
+from utils.cube_utils import reverse_alg_string, generate_3qtm_cube_moves
 from utils.env_utils import create_nnet_with_overridden_params
 from environments.environment_abstract import Environment, State
 
@@ -26,8 +27,11 @@ class Cube2State(State):
 
 
 class Cube2(Environment):
-    moves: List[str] = ["%s%s" % (f, n) for f in ['U', 'D', 'L', 'R', 'B', 'F'] for n in ['', '\'', '2']]
-    moves_rev: List[str] = ["%s%s" % (f, n) for f in ['U', 'D', 'L', 'R', 'B', 'F'] for n in ['\'', '', '2']]
+    # moves: List[str] = ["%s%s" % (f, n) for f in ['U', 'D', 'L', 'R', 'B', 'F'] for n in ['', '\'']]
+    # moves_rev: List[str] = ["%s%s" % (f, n) for f in ['U', 'D', 'L', 'R', 'B', 'F'] for n in ['\'', '']]
+    moves: List[str] = generate_3qtm_cube_moves()
+    moves_rev: List[str] = [reverse_alg_string(move) for move in moves]
+    costs: List[int] = [len(move.split(' ')) for move in moves]
 
     def __init__(self):
         super().__init__()
@@ -44,7 +48,8 @@ class Cube2(Environment):
         states_next_np = self._move_np(states_np, action)
 
         states_next: List[Cube2State] = [Cube2State(states_next_np[0][i]) for i in range(states_next_np[0].shape[0])]
-        transition_costs = [1 for _ in range(len(states))]
+        cost: int = self.costs[action]
+        transition_costs = [cost for _ in range(len(states))]
 
         return states_next, transition_costs
 
