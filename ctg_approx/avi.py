@@ -233,6 +233,9 @@ def main():
 
         nnet_utils.stop_heuristic_fn_runners(heur_procs, heur_fn_i_q)
 
+        # Print progress
+        print(f"Iteration {itr} of {args_dict['max_itrs']} ({(itr / args_dict['max_itrs']) * 100:.1f}%)")
+
         # train nnet
         num_train_itrs: int = args_dict['epochs_per_update'] * np.ceil(outputs.shape[0] / args_dict['batch_size'])
         print("Training model for update number %i for %i iterations" % (update_num, num_train_itrs))
