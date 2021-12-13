@@ -1,5 +1,6 @@
 from typing import List, Tuple
 import numpy as np
+from environments.hanoi import Hanoi
 from environments.environment_abstract import Environment, State
 from utils import misc_utils
 
@@ -8,6 +9,9 @@ def is_valid_soln(state: State, soln: List[int], env: Environment) -> bool:
     soln_state: State = state
     move: int
     for move in soln:
+        # if isinstance(env, Hanoi):
+        #     move_str = env.moves[move]
+        #     move = env.moves_rev.index(move_str)
         soln_state = env.next_state([soln_state], move)[0][0]
 
     return env.is_solved([soln_state])[0]
@@ -16,7 +20,16 @@ def is_valid_soln(state: State, soln: List[int], env: Environment) -> bool:
 def bellman(states: List, heuristic_fn, env: Environment) -> Tuple[np.ndarray, List[np.ndarray], List[List[State]]]:
     # expand states
     states_exp, tc_l = env.expand(states)
-    tc = np.squeeze(np.concatenate(tc_l, axis=0))
+    try:
+        tc = np.concatenate(tc_l, axis=0)
+        if len(tc.shape) == 3:
+            tc = np.squeeze(tc_l)
+        tc = tc.ravel()
+    except:
+        tc = np.squeeze(np.concatenate(misc_utils.flatten(tc_l)[0], axis=1))
+    # tc = np.concatenate(tc_l, axis=0)
+    # if len(tc.shape) == 3:
+    #     tc = np.squeeze(tc)
 
     # get cost-to-go of expanded states
     states_exp_flat, split_idxs = misc_utils.flatten(states_exp)

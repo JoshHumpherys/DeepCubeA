@@ -107,6 +107,8 @@ class Hanoi(Environment):
                 """
         if isinstance(states[0], HanoiState):
             states_h = np.stack([x.discs for x in states], axis=0)
+            if len(states_h.shape) == 3:
+                states_h = np.squeeze(states_h)
         elif isinstance(states[0], np.ndarray):
             states_h = np.array(states)
 
@@ -207,6 +209,8 @@ class Hanoi(Environment):
 
         # numpy states
         states_h: np.ndarray = np.stack([state.discs for state in states])
+        if len(states_h.shape) == 3:
+            states_h = np.squeeze(states_h)
 
         # determine which moves are possible for state
         moves_possible_for_state = self._get_valid_moves(states_h)
@@ -214,13 +218,17 @@ class Hanoi(Environment):
         for idx in range(len(states)):
             state_h = np.expand_dims(states_h[idx, :], 0)
 
+            tc_for_state: np.ndarray = np.empty([1, len(moves_possible_for_state[idx])])
             for move_idx in range(len(moves_possible_for_state[idx])):
                 move = np.expand_dims(moves_possible_for_state[idx][move_idx], 1)
                 state_next_h, tc_move = self._move_h(state_h, move)
 
                 states_exp[idx].append(HanoiState(state_next_h))
-                tc[idx].append(tc_move)
+                tc_for_state[0, move_idx] = np.array(tc_move)
 
+            tc[idx].append(tc_for_state)
+
+        # tc_l = List[np.ndarray] = [tc_for_state[i] for i in range(len(states))]
         tc_l = tc
 
         return states_exp, tc_l
@@ -329,7 +337,10 @@ class Hanoi(Environment):
             src = np.expand_dims(pole_src[i, :], 0)
             aux = np.expand_dims(pole_aux[i, :], 0)
             tgt = np.expand_dims(pole_tgt[i, :], 0)
-            move = self.moves[action[i][0]]
+            if isinstance(action, (int, np.integer)):
+                move = self.moves[action]
+            else:
+                move = self.moves[action[i][0]]
 
             ########## Process disk move
             ### Initialize

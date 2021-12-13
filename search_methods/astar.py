@@ -1,5 +1,6 @@
 from typing import List, Tuple, Dict, Callable, Optional, Any
 from environments.environment_abstract import Environment, State
+from environments.hanoi import Hanoi
 import numpy as np
 from heapq import heappush, heappop
 from subprocess import Popen, PIPE
@@ -123,7 +124,17 @@ def expand_nodes(instances: List[Instance], popped_nodes_all: List[List[Node]], 
 
     # Update path costs for all states at once (for speed)
     parent_path_costs = np.expand_dims(np.array([node.path_cost for node in popped_nodes_flat]), 1)
-    path_costs_c: List[float] = (parent_path_costs + np.array(tcs_by_node)).flatten().tolist()
+    if isinstance(env, Hanoi):
+        path_costs_c: List[float] = []
+        for i_temp in range(len(parent_path_costs)):
+            current_cost = parent_path_costs[i_temp]
+            current_tcs_by_node = tcs_by_node[i_temp][0]
+            path_costs_c.append(current_cost + current_tcs_by_node)
+
+        path_costs_c = np.concatenate(path_costs_c, axis=1).ravel().tolist()
+    else:
+        path_costs_c: List[float] = (parent_path_costs + np.array(tcs_by_node)).flatten().tolist()
+    # path_costs_c: List[float] = (parent_path_costs + np.array(tcs_by_node)).flatten().tolist()
 
     path_costs_c_by_node: List[List[float]] = misc_utils.unflatten(path_costs_c, split_idxs_c)
 
@@ -153,11 +164,25 @@ def expand_nodes(instances: List[Instance], popped_nodes_all: List[List[Node]], 
         for parent_node, tcs_node, path_costs_c, states_c, is_solved_c in zip(parent_nodes, tcs_by_node,
                                                                               path_costs_c_by_node, states_c_by_node,
                                                                               is_solved_c_by_node):
+            if isinstance(env, Hanoi):
+                if len(parent_node.state.discs.shape) == 1:
+                    parent_state_temp = np.expand_dims(parent_node.state.discs, 0)
+                else:
+                    parent_state_temp = parent_node.state.discs
+                legal_moves = env._get_valid_moves(parent_state_temp)[0].ravel()
+                legal_moves_str = [env.moves[i] for i in legal_moves]
+                legal_moves_rev = [env.moves_rev.index(i) for i in legal_moves_str]
+
             state: State
             for move_idx, state in enumerate(states_c):
                 path_cost: float = path_costs_c[move_idx]
                 is_solved: bool = is_solved_c[move_idx]
-                node_c: Node = Node(state, path_cost, is_solved, move_idx, parent_node)
+
+                if isinstance(env, Hanoi):
+                    node_c: Node = Node(state, path_cost, is_solved, legal_moves[move_idx], parent_node)
+                else:
+                    node_c: Node = Node(state, path_cost, is_solved, move_idx, parent_node)
+                # node_c: Node = Node(state, path_cost, is_solved, move_idx, parent_node)
 
                 nodes_c_by_inst[inst_idx].append(node_c)
 
