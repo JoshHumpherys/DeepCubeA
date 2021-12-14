@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class ResnetModel(nn.Module):
     def __init__(self, state_dim: int, one_hot_depth: int, h1_dim: int, resnet_dim: int, num_resnet_blocks: int,
-                 out_dim: int, batch_norm: bool, conv: bool = False):
+                 out_dim: int, batch_norm: bool, conv: bool = False, ochan: int = 36):
         super().__init__()
         self.one_hot_depth: int = one_hot_depth
         self.state_dim: int = state_dim
@@ -14,8 +14,8 @@ class ResnetModel(nn.Module):
         self.batch_norm = batch_norm
         input_size = self.state_dim * (self.one_hot_depth or 1)
         if conv:
-            self.conv = nn.Conv1d(1, 36, one_hot_depth * 9, one_hot_depth * 9)
-            fc1_in = self.conv.out_channels * 6
+            self.conv = nn.Conv1d(one_hot_depth, ochan, 9, 9)
+            fc1_in = self.conv.out_channels * one_hot_depth
         else:
             self.conv = None
             fc1_in = input_size
@@ -62,7 +62,7 @@ class ResnetModel(nn.Module):
             x = x.float()
 
         if self.conv is not None:
-            x = torch.reshape(x, (x.shape[0], 1, x.shape[1]))
+            x = torch.reshape(x, (x.shape[0], x.shape[1] // self.one_hot_depth, self.one_hot_depth)).transpose(1, 2)
             x = self.conv(x)
             x = torch.reshape(x, (x.shape[0], x.shape[1] * x.shape[-1]))
 
