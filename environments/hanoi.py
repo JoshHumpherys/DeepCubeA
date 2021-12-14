@@ -377,3 +377,36 @@ class Hanoi(Environment):
         transition_costs: List[float] = [1.0 for _ in range(states_h.shape[0])]
 
         return states_next_h, transition_costs
+
+    def _identify_pole_for_disk(self, state, n):
+        idx = np.argwhere(state == n)
+
+        if self.pole_s_start_idx <= idx and idx < self.pole_s_stop_idx:
+            k = 0
+        elif self.pole_a_start_idx <= idx and idx < self.pole_a_stop_idx:
+            k = 1
+        else:
+            k = 2
+
+        return k
+
+    def get_optimal_path_length(self, state_h):
+
+        state = state_h.discs
+
+        # Goal state is all disks on target pole
+        k = 2
+        mu = (2**self.dim) - 1
+
+        for n in range(self.dim, 0, -1):
+            pole_for_n = self._identify_pole_for_disk(state, n)
+
+            if pole_for_n == k:
+                mu = mu - 2**(n - 1)
+            else:
+                d_0 = n
+                k_0 = k
+                k = 3 - pole_for_n - k
+
+        return mu
+
