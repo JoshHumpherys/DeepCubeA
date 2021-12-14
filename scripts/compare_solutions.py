@@ -14,18 +14,22 @@ def print_stats(data, hist=False):
 
 
 def print_results(results):
-    times = np.array(results["times"])
-    lens = np.array([len(x) for x in results["solutions"]])
-    num_nodes_generated = np.array(results["num_nodes_generated"])
+    # times = np.array(results["times"])
+    # lens = np.array([len(x) for x in results["solutions"]])
+    # num_nodes_generated = np.array(results["num_nodes_generated"])
+    if isinstance(results['solutions'][0], list):
+        lens = np.array([len(x) for x in results["solutions"]])
+    else:
+        lens = np.array(results['solutions'])
 
-    print("-Times-")
-    print_stats(times)
+    # print("-Times-")
+    # print_stats(times)
     print("-Lengths-")
     print_stats(lens)
-    print("-Nodes Generated-")
-    print_stats(num_nodes_generated)
-    print("-Nodes/Sec-")
-    print_stats(np.array(num_nodes_generated) / np.array(times))
+    # print("-Nodes Generated-")
+    # print_stats(num_nodes_generated)
+    # print("-Nodes/Sec-")
+    # print_stats(np.array(num_nodes_generated) / np.array(times))
 
 
 def main():
@@ -39,7 +43,10 @@ def main():
     results1 = pickle.load(open(args.soln1, "rb"))
     results2 = pickle.load(open(args.soln2, "rb"))
 
-    lens1 = np.array([len(x) for x in results1["solutions"]])
+    if isinstance(results1['solutions'][0], list):
+        lens1 = np.array([len(x) for x in results1["solutions"]])
+    else:
+        lens1 = np.array(results1['solutions'])
     lens2 = np.array([len(x) for x in results2["solutions"]])
 
     print("%i states" % (len(results1["states"])))

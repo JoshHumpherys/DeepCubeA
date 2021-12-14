@@ -1,4 +1,5 @@
 from typing import List
+from environments.hanoi import Hanoi
 from environments.environment_abstract import Environment, State
 from utils import env_utils
 from argparse import ArgumentParser
@@ -24,12 +25,20 @@ def generate_and_save_states(env: Environment, num_states: int, back_max: int, f
 
         data_gen_time = time.time() - start_time
 
+        if isinstance(env, Hanoi):
+            optimal_path_length = []
+            for state in states:
+                optimal_path_length.append(env.get_optimal_path_length(state))
+
         # save data
         start_time = time.time()
 
         data = dict()
         data['states'] = states
         data['num_back_steps'] = num_back_steps
+
+        if isinstance(env, Hanoi):
+            data['solutions'] = optimal_path_length
 
         pickle.dump(data, open(filepath, "wb"), protocol=-1)
 
